@@ -3,6 +3,7 @@ import pandas as pd
 from scipy.interpolate import UnivariateSpline, LSQUnivariateSpline
 
 def clean_arrays(time,flux,fluxerr=None):
+    print('no. datapoints prior to cleaning: '.format(len(time)))
     # make sure data x vals are in increasing numbers
     order = np.argsort(time)
     flux = flux[order]
@@ -14,6 +15,7 @@ def clean_arrays(time,flux,fluxerr=None):
     mask = ~np.isnan(flux) & ~np.isnan(time)
     flux = flux[mask]
     time = time[mask]
+    print('no. datapoints after cleaning: '.format(len(time)))
     if isinstance(fluxerr,np.ndarray):
         fluxerr = fluxerr[mask]
         return time, flux, fluxerr
