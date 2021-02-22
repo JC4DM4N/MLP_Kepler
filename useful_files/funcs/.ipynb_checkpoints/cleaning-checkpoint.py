@@ -1,59 +1,17 @@
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+from astropy.table import Table
 from scipy.interpolate import UnivariateSpline, LSQUnivariateSpline
+from os import listdir
 
-def clean_arrays(time,flux,fluxerr=None):
-    # make sure data x vals are in increasing numbers
-    order = np.argsort(time)
-    flux = flux[order]
-    time = time[order]
-    if isinstance(fluxerr,np.ndarray):
-        fluxerr = fluxerr[order]
-
-    # ensure no nans before fitting
-    mask = ~np.isnan(flux) & ~np.isnan(time)
-    flux = flux[mask]
-    time = time[mask]
-    if isinstance(fluxerr,np.ndarray):
-        fluxerr = fluxerr[mask]
-        return time, flux, fluxerr
-    else: 
-        return time, flux
-
-def fold_data(obs,sysid,df,planetid=None):
-    """
-    fold the data back on itself given the planet's orbital period.
-    """
-    times = obs[1].data.TIME
-    flux = obs[1].data.PDCSAP_FLUX
-    if planetid:
-        period = df[df.kepid==sysid]['koi_period'].iloc[planetid]
-    else:
-        period = df[df.kepid==sysid]['koi_period'].iloc[0]
-    
-    times -= times[0]
-    times = np.mod(times,period)
-    
-    plt.scatter(times,flux,s=0.5)
-    #plt.ylim([8230,8290])
-
-    return times, flux
-
-def fold_data_new(time,flux,period,plot=True):
-    time -= time[0]
-    time = np.mod(time,period)
-    if plot:
-        plt.scatter(time,flux,s=0.5)
-        plt.title('folded data on period %s days' %period)
-        plt.show()
-    return time,flux
 
 def fit_spline(time,flux,plot=False,nknots=None):
     # make sure data x vals are in increasing numbers
     order = np.argsort(time)
     flux = flux[order]
     time = time[order]
-    
+
     # ensure no nans before fitting
     mask = ~np.isnan(flux) & ~np.isnan(time)
     flux = flux[mask]
@@ -64,10 +22,10 @@ def fit_spline(time,flux,plot=False,nknots=None):
         nknots = int((time[-1]-time[0])/0.1)
         print('default of 1 knot per 0.1 days...')
     knots = np.linspace(time[0],time[-1],nknots)
-    
+
     # fit spline...need to check this is correct spline to be fitting
     tck = LSQUnivariateSpline(time,flux,t=knots[1:-1])
-    
+
     if plot:
         y = tck(time)
 
@@ -80,47 +38,74 @@ def fit_spline(time,flux,plot=False,nknots=None):
         plt.show()
     return tck
 
-def remove_stellar_activity(obs,nknots=50):
-    
-    time = obs[1].data.TIME
-    flux = obs[1].data.PDCSAP_FLUX
-    fluxerr = obs[1].data.PDCSAP_FLUX_ERR
-    
-    time,flux,fluxerr = clean_arrays(time,flux,fluxerr)
-    
-    tck = fit_spline(time,flux,nknots=nknots)
-    mask = np.ones(len(time),dtype=bool)
-    converged = False
-    n = 0
-    while not converged:
-        time = time[mask]
-        flux = flux[mask]
-        fluxerr = fluxerr[mask]
-        tck = fit_spline(time,flux,nknots=nknots)
-        y = tck(time)
-        mask = (flux+3*fluxerr > y) & (flux-3*fluxerr < y)
-        if mask.sum()==len(mask):
-            converged=True
-            print('spline-fit converged after %i iterations.' %n)
-        else:
-            n+=1
+class clean():
+    def __init__(self, system_id, koi, lc_index):
 
-    # fit converged spline back on original data...
-        
-    time = obs[1].data.TIME
-    flux = obs[1].data.PDCSAP_FLUX
-    fluxerr = obs[1].data.PDCSAP_FLUX_ERR
-    
-    time,flux,fluxerr = clean_arrays(time,flux,fluxerr)
-    
-    plt.scatter(time,flux,s=0.5)
-    plt.plot(time,tck(time))
-    plt.title('data with spline overplotted')
-    plt.show()
+        #finds the date part of the
+        fnames = sorted(listdir('../fits/'))
+        fnames = [fname[14:31] for fname in fnames if (fname[4:13] == '{:09d}'.format(system_id))]
 
-    flux -= tck(time)
-    plt.scatter(time,flux,s=0.5)
-    plt.title('data with spline removed')
-    plt.show()
-    
-    return time,flux,fluxerr,tck
+        data = Table.read('../fits/kplr{:09d}-{}.fits'.format(system_id, fnames[lc_index]))['TIME','PDCSAP_FLUX','PDCSAP_FLUX_ERR']
+        self.time = np.array(data['TIME'])
+        self.flux = np.array(data['PDCSAP_FLUX'])
+        self.fluxerr = np.array(data['PDCSAP_FLUX_ERR'])
+        self.period = koi.loc[system_id]['koi_period']
+
+    def plot(self):
+        fig, ax = plt.subplots(1,1, figsize=(10,3))
+        ax.plot(self.time, self.flux)
+
+    def clean_arrays(self):
+
+        print('no. datapoints prior to cleaning: {}'.format(len(self.time)))
+        # make sure data x vals are in increasing numbers
+        order = np.argsort(self.time)
+        self.flux = self.flux[order]
+        self.time = self.time[order]
+        if isinstance(self.fluxerr,np.ndarray):
+            self.fluxerr = self.fluxerr[order]
+
+        # ensure no nans before fitting
+        mask = ~np.isnan(self.flux) & ~np.isnan(self.time)
+        self.flux = self.flux[mask]
+        self.time = self.time[mask]
+        print('no. datapoints after cleaning: {}'.format(len(self.time)))
+        if isinstance(self.fluxerr,np.ndarray):
+            self.fluxerr = self.fluxerr[mask]
+
+    def fold_data(self, plot=True):
+        self.time -= self.time[0]
+        self.time = np.mod(self.time,self.period)
+        if plot:
+            plt.scatter(self.time,self.flux,s=0.5)
+            plt.title('folded data on period %s days' %self.period)
+            plt.show()
+
+    def remove_stellar_activity(self,nknots=50):
+
+        tck = fit_spline(self.time,self.flux,nknots=nknots)
+        mask = np.ones(len(self.time),dtype=bool)
+        converged = False
+        n = 0
+        while not converged:
+            self.time = self.time[mask]
+            self.flux = self.flux[mask]
+            self.fluxerr = self.fluxerr[mask]
+            tck = fit_spline(self.time,self.flux,nknots=nknots)
+            y = tck(self.time)
+            mask = (self.flux+3*self.fluxerr > y) & (self.flux-3*self.fluxerr < y)
+            if mask.sum()==len(mask):
+                converged=True
+                print('spline-fit converged after %i iterations.' %n)
+            else:
+                n+=1
+
+        plt.scatter(self.time,self.flux,s=0.5)
+        plt.plot(self.time,tck(self.time))
+        plt.title('data with spline overplotted')
+        plt.show()
+
+        self.flux -= tck(self.time)
+        plt.scatter(self.time,self.flux,s=0.5)
+        plt.title('data with spline removed')
+        plt.show()

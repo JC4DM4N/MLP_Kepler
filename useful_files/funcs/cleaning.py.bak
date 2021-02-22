@@ -11,7 +11,7 @@ def fit_spline(time,flux,plot=False,nknots=None):
     order = np.argsort(time)
     flux = flux[order]
     time = time[order]
-
+    
     # ensure no nans before fitting
     mask = ~np.isnan(flux) & ~np.isnan(time)
     flux = flux[mask]
@@ -22,10 +22,10 @@ def fit_spline(time,flux,plot=False,nknots=None):
         nknots = int((time[-1]-time[0])/0.1)
         print('default of 1 knot per 0.1 days...')
     knots = np.linspace(time[0],time[-1],nknots)
-
+    
     # fit spline...need to check this is correct spline to be fitting
     tck = LSQUnivariateSpline(time,flux,t=knots[1:-1])
-
+    
     if plot:
         y = tck(time)
 
@@ -40,23 +40,23 @@ def fit_spline(time,flux,plot=False,nknots=None):
 
 class clean():
     def __init__(self, system_id, koi, lc_index):
-
-        #finds the date part of the
-        fnames = sorted(listdir('../fits/'))
-        fnames = [fname[14:31] for fname in fnames if (fname[4:13] == '{:09d}'.format(system_id))]
-
+		
+    	#finds the date part of the 
+    	fnames = sorted(listdir(pwd + 'fits/'))
+    	fnames = [fname[14:31] for fname in fnames if (fname[4:13] == '{:09d}'.format(system_id))]
+		
         data = Table.read('../fits/kplr{:09d}-{}.fits'.format(system_id, fnames[lc_index]))['TIME','PDCSAP_FLUX','PDCSAP_FLUX_ERR']
         self.time = np.array(data['TIME'])
         self.flux = np.array(data['PDCSAP_FLUX'])
         self.fluxerr = np.array(data['PDCSAP_FLUX_ERR'])
         self.period = koi.loc[system_id]['koi_period']
-
+		
     def plot(self):
         fig, ax = plt.subplots(1,1, figsize=(10,3))
         ax.plot(self.time, self.flux)
-
+        
     def clean_arrays(self):
-
+        
         print('no. datapoints prior to cleaning: {}'.format(len(self.time)))
         # make sure data x vals are in increasing numbers
         order = np.argsort(self.time)
@@ -72,7 +72,7 @@ class clean():
         print('no. datapoints after cleaning: {}'.format(len(self.time)))
         if isinstance(self.fluxerr,np.ndarray):
             self.fluxerr = self.fluxerr[mask]
-
+            
     def fold_data(self, plot=True):
         self.time -= self.time[0]
         self.time = np.mod(self.time,self.period)
@@ -80,7 +80,7 @@ class clean():
             plt.scatter(self.time,self.flux,s=0.5)
             plt.title('folded data on period %s days' %self.period)
             plt.show()
-
+        
     def remove_stellar_activity(self,nknots=50):
 
         tck = fit_spline(self.time,self.flux,nknots=nknots)
