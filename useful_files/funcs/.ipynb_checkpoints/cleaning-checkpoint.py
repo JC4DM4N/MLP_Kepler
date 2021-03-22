@@ -101,7 +101,7 @@ def cross_validation(time,flux):
 
 
 class clean():
-	def __init__(self, system_id, koi, lc_index=None, slc_or_llc = 'llc'):
+	def __init__(self, system_id, koi, lc_index=None, slc_or_llc = 'llc', verbose=True):
 		"""
 		Initialise class clean()
 
@@ -119,8 +119,12 @@ class clean():
 			Note: slc and llc have average cadences of 1min and 30min respectively.
 		"""
 		self.period = koi.loc[system_id]['koi_period']
-		#finds the date part of the filename
+		self.target = (koi.loc[system_id]['koi_pdisposition'] == 'CANDIDATE')
+		
 		fnames = sorted(listdir('../fits/{}/'.format(slc_or_llc)))
+		self.n_lcs  = len([fname for fname in fnames if fname.startswith('kplr{:09d}-'.format(system_id))])
+		assert self.n_lcs > 0, 'This system has no {} lightcurves'.format(slc_or_llc)
+		
 		fnames = [fname[14:31] for fname in fnames if (fname[4:13] == '{:09d}'.format(system_id))]
 		if lc_index == None:
 			t = np.empty(0)
@@ -140,10 +144,12 @@ class clean():
 		self.time = t
 		self.flux = f
 		self.fluxerr = e
-		self.n = len(t)
 		
-		# set to True if data has been cleaned
-		self.clean = False
+		self.clean_arrays()
+		self.n = len(self.time)
+		
+		if verbose:
+			print('System ID: {}\nPlanet: {}\nPeriod: {:.2f}\nNo. available {} files: {}\nSequence length: {}\nExtent: {:.2f} days\n'.format(system_id, self.target, self.period, slc_or_llc, self.n_lcs, self.n, self.time[-1]-self.time[0]))
 
 	def plot(self):
 		"""
