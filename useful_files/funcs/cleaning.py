@@ -118,8 +118,11 @@ class clean():
 			either 'slc' or 'llc'. Note that not every system has an slc (but should have llc)
 			Note: slc and llc have average cadences of 1min and 30min respectively.
 		"""
-		self.period = koi.loc[system_id]['koi_period']
-		self.target = (koi.loc[system_id]['koi_pdisposition'] == 'CANDIDATE')
+		
+		self.period = np.array(koi.loc[system_id]['koi_period'])
+		planet_bool = np.array(koi.loc[system_id]['koi_pdisposition'] == 'CANDIDATE', dtype='bool')
+		self.n_planets = planet_bool.sum()
+		self.target = np.any(planet_bool)
 		
 		fnames = sorted(listdir('../fits/{}/'.format(slc_or_llc)))
 		self.n_lcs  = len([fname for fname in fnames if fname.startswith('kplr{:09d}-'.format(system_id))])
@@ -149,7 +152,8 @@ class clean():
 		self.n = len(self.time)
 		
 		if verbose:
-			print('System ID: {}\nPlanet: {}\nPeriod: {:.2f}\nNo. available {} files: {}\nSequence length: {}\nExtent: {:.2f} days\n'.format(system_id, self.target, self.period, slc_or_llc, self.n_lcs, self.n, self.time[-1]-self.time[0]))
+			print('System ID: {}\nPlanet: {}\nNo. planets: {}\nNo. available {} files: {}\nSequence length: {}\nExtent: {:.2f} days\n'.format(system_id, self.target, self.n_planets, slc_or_llc, self.n_lcs, self.n, self.time[-1]-self.time[0]))
+			print('Period(s):',np.round(self.period,2),'\n')
 
 	def plot(self):
 		"""
